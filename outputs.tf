@@ -1,10 +1,3 @@
-# outputs.tf
-# Définit les informations à afficher après le déploiement
-
-# ============================================
-# INFORMATIONS VPC
-# ============================================
-
 output "vpc_id" {
   description = "ID du VPC créé"
   value       = aws_vpc.main.id
@@ -15,9 +8,7 @@ output "vpc_cidr" {
   value       = aws_vpc.main.cidr_block
 }
 
-# ============================================
-# INFORMATIONS SOUS-RÉSEAUX
-# ============================================
+
 
 output "public_subnet_ids" {
   description = "IDs des sous-réseaux publics"
@@ -29,9 +20,7 @@ output "private_subnet_ids" {
   value       = aws_subnet.private[*].id
 }
 
-# ============================================
-# INFORMATIONS WEB SERVER
-# ============================================
+
 
 output "web_server_id" {
   description = "ID de l'instance EC2 web server"
@@ -53,18 +42,14 @@ output "web_server_url" {
   value       = "http://${aws_instance.web_server.public_ip}"
 }
 
-# ============================================
-# INFORMATIONS NAT GATEWAY
-# ============================================
+
 
 output "nat_gateway_ip" {
   description = "Adresse IP publique du NAT Gateway"
   value       = aws_eip.nat.public_ip
 }
 
-# ============================================
-# INFORMATIONS RDS
-# ============================================
+
 
 output "rds_endpoint" {
   description = "Endpoint de connexion à la base de données"
@@ -92,9 +77,6 @@ output "rds_username" {
   sensitive   = true
 }
 
-# ============================================
-# INFORMATIONS DE CONNEXION
-# ============================================
 
 output "connection_instructions" {
   description = "Instructions de connexion"

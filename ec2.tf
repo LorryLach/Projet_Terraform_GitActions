@@ -1,7 +1,3 @@
-# ec2.tf
-# Configuration de l'instance EC2 avec Nginx
-
-# Data source pour obtenir la dernière AMI Amazon Linux 2023
 data "aws_ami" "amazon_linux_2023" {
   most_recent = true
   owners      = ["amazon"]
@@ -17,7 +13,7 @@ data "aws_ami" "amazon_linux_2023" {
   }
 }
 
-# User Data script pour installer et configurer Nginx
+
 locals {
   user_data = <<-EOF
     #!/bin/bash
@@ -82,28 +78,28 @@ locals {
   EOF
 }
 
-# Instance EC2 pour le Web Server
+
 resource "aws_instance" "web_server" {
   ami                    = data.aws_ami.amazon_linux_2023.id
   instance_type          = var.instance_type
-  subnet_id              = aws_subnet.public[1].id  # Public Subnet 2 dans AZ-B
+  subnet_id              = aws_subnet.public[1].id  
   vpc_security_group_ids = [aws_security_group.web_server.id]
   
-  # User data pour installer Nginx automatiquement
+  
   user_data = local.user_data
   
-  # Configuration du volume racine
+  
   root_block_device {
-    volume_size           = 30  # 8 GB (free tier)
+    volume_size           = 30  
     volume_type           = "gp3"
     delete_on_termination = true
     encrypted             = true
   }
   
-  # Metadata options (bonnes pratiques de sécurité)
+  
   metadata_options {
     http_endpoint               = "enabled"
-    http_tokens                 = "required"  # IMDSv2 obligatoire
+    http_tokens                 = "required"  
     http_put_response_hop_limit = 1
   }
   

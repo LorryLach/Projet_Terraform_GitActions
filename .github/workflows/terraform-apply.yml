@@ -100,7 +100,7 @@ jobs:
 
       - name: Terraform Format Check
         run: terraform fmt -check
-        continue-on-error: true  # Ne bloque pas le workflow si le format n'est pas parfait
+        continue-on-error: true  
 
       - name: Terraform Validate
         run: |
