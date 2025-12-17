@@ -6,7 +6,7 @@ on:
     branches: [ main ]
 
 env:
-  BUCKET_NAME: terraform-state-lorrylach-2025
+  BUCKET_NAME: terraform-state-lorrylach-2025v2
   AWS_REGION: us-east-1
 
 jobs:
