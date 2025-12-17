@@ -11,29 +11,11 @@ env:
 
 jobs:
   # ═══════════════════════════════════════════════════════════
-  # JOB 1 : VALIDATION DE LA CONFIRMATION
-  # ═══════════════════════════════════════════════════════════
-  validate:
-    name: ✋ Validate Destruction Request
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: 🛑 Check Confirmation
-        run: |
-          if [ "${{ github.event.inputs.confirm }}" != "destroy" ]; then
-            echo "❌ ERREUR: Vous devez taper 'destroy' pour confirmer"
-            echo "Vous avez tapé: '${{ github.event.inputs.confirm }}'"
-            exit 1
-          fi
-          echo "✅ Confirmation reçue - destruction autorisée"
-
-  # ═══════════════════════════════════════════════════════════
-  # JOB 2 : DESTRUCTION DE L'INFRASTRUCTURE
+  # JOB 1 : DESTRUCTION DE L'INFRASTRUCTURE
   # ═══════════════════════════════════════════════════════════
   destroy:
     name: 💥 Destroy Infrastructure
     runs-on: ubuntu-latest
-    needs: validate
     
     steps:
       - name: 📥 Checkout code
@@ -120,7 +102,7 @@ jobs:
           fi
 
   # ═══════════════════════════════════════════════════════════
-  # JOB 3 : NETTOYAGE DU BUCKET S3 (Optionnel)
+  # JOB 2 : NETTOYAGE DU BUCKET S3 (Optionnel)
   # ═══════════════════════════════════════════════════════════
   cleanup:
     name: 🧹 Cleanup S3 Backend (Optional)
