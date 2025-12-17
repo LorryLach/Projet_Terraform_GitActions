@@ -6,16 +6,14 @@ on:
     branches: [ main ]
 
 env:
-  BUCKET_NAME: terraform-state-lorrylach-2025  
+  BUCKET_NAME: terraform-state-lorrylach-2025
   AWS_REGION: us-east-1
 
 jobs:
   bootstrap:
     name: Bootstrap AWS Backend
     runs-on: ubuntu-latest
-    outputs:
-      bucket_exists: ${{ steps.check_bucket.outputs.exists }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -32,25 +30,30 @@ jobs:
         id: check_bucket
         run: |
           echo "Vérification du bucket ${{ env.BUCKET_NAME }}..."
-          if aws s3 ls "s3://${{ env.BUCKET_NAME }}" 2>&1 | grep -q 'NoSuchBucket\|An error occurred'; then
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Bucket n'existe pas - création nécessaire"
-          else
+          if aws s3api head-bucket --bucket "${{ env.BUCKET_NAME }}" 2>/dev/null; then
             echo "exists=true" >> $GITHUB_OUTPUT
             echo "Bucket existe déjà"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Bucket n'existe pas - création nécessaire"
           fi
 
-      - name: Create S3 bucket
+      - name: Create and configure S3 bucket
         if: steps.check_bucket.outputs.exists == 'false'
         run: |
-          echo "Création du bucket ${{ env.BUCKET_NAME }}..."
-          aws s3 mb "s3://${{ env.BUCKET_NAME }}" --region ${{ env.AWS_REGION }}
-          
+          echo "Création du bucket ${{ env.BUCKET_NAME }} (us-east-1)..."
+
+          aws s3api create-bucket \
+            --bucket "${{ env.BUCKET_NAME }}"
+
+          echo "Attente de la propagation AWS S3..."
+          sleep 10
+
           echo "Activation du versioning..."
           aws s3api put-bucket-versioning \
             --bucket "${{ env.BUCKET_NAME }}" \
             --versioning-configuration Status=Enabled
-          
+
           echo "Activation du chiffrement..."
           aws s3api put-bucket-encryption \
             --bucket "${{ env.BUCKET_NAME }}" \
@@ -61,21 +64,20 @@ jobs:
                 }
               }]
             }'
-          
+
           echo "Blocage de l'accès public..."
           aws s3api put-public-access-block \
             --bucket "${{ env.BUCKET_NAME }}" \
             --public-access-block-configuration \
             "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
-          
-          echo "Bucket créé et configuré avec succès"
 
+          echo "Bucket créé et configuré avec succès"
 
   terraform:
     name: Terraform Deployment
     runs-on: ubuntu-latest
-    needs: bootstrap  
-    
+    needs: bootstrap
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -83,7 +85,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.6.0  
+          terraform_version: 1.6.0
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -101,7 +103,7 @@ jobs:
 
       - name: Terraform Format Check
         run: terraform fmt -check
-        continue-on-error: true  
+        continue-on-error: true
 
       - name: Terraform Validate
         run: |
