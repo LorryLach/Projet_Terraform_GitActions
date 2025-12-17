@@ -5,24 +5,21 @@ on:
     branches: [ main ]
 
 env:
-  BUCKET_NAME: terraform-state-lorrylach-2025  # ⬅️ Même nom qu'avant
+  BUCKET_NAME: terraform-state-lorrylach-2025  
   AWS_REGION: us-east-1
 
 jobs:
-  # ═══════════════════════════════════════════════════════════
-  # JOB 1 : BOOTSTRAP - Prépare l'infrastructure de base
-  # ═══════════════════════════════════════════════════════════
   bootstrap:
-    name: 🚀 Bootstrap AWS Backend
+    name: Bootstrap AWS Backend
     runs-on: ubuntu-latest
     outputs:
       bucket_exists: ${{ steps.check_bucket.outputs.exists }}
     
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: 🔐 Configure AWS Credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -30,19 +27,19 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: 🔍 Check if S3 bucket exists
+      - name: Check if S3 bucket exists
         id: check_bucket
         run: |
           echo "Vérification du bucket ${{ env.BUCKET_NAME }}..."
           if aws s3 ls "s3://${{ env.BUCKET_NAME }}" 2>&1 | grep -q 'NoSuchBucket\|An error occurred'; then
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "❌ Bucket n'existe pas - création nécessaire"
+            echo "Bucket n'existe pas - création nécessaire"
           else
             echo "exists=true" >> $GITHUB_OUTPUT
-            echo "✅ Bucket existe déjà"
+            echo "Bucket existe déjà"
           fi
 
-      - name: 🪣 Create S3 bucket
+      - name: Create S3 bucket
         if: steps.check_bucket.outputs.exists == 'false'
         run: |
           echo "Création du bucket ${{ env.BUCKET_NAME }}..."
@@ -70,27 +67,24 @@ jobs:
             --public-access-block-configuration \
             "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
           
-          echo "✅ Bucket créé et configuré avec succès"
+          echo "Bucket créé et configuré avec succès"
 
 
-  # ═══════════════════════════════════════════════════════════
-  # JOB 2 : TERRAFORM - Déploie l'infrastructure
-  # ═══════════════════════════════════════════════════════════
   terraform:
-    name: 🏗️ Terraform Deployment
+    name: Terraform Deployment
     runs-on: ubuntu-latest
-    needs: bootstrap  # ⬅️ Attend que le bootstrap soit terminé
+    needs: bootstrap  
     
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: 🔧 Setup Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.6.0  # ⬅️ Ajustez la version si nécessaire
+          terraform_version: 1.6.0  
 
-      - name: 🔐 Configure AWS Credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -98,36 +92,36 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: 🎯 Terraform Init
+      - name: Terraform Init
         run: |
           echo "Initialisation de Terraform..."
           terraform init
-          echo "✅ Terraform initialisé"
+          echo "Terraform initialisé"
 
-      - name: 🎨 Terraform Format Check
+      - name: Terraform Format Check
         run: terraform fmt -check
         continue-on-error: true  # Ne bloque pas le workflow si le format n'est pas parfait
 
-      - name: ✅ Terraform Validate
+      - name: Terraform Validate
         run: |
           echo "Validation de la configuration..."
           terraform validate
-          echo "✅ Configuration valide"
+          echo "Configuration valide"
 
-      - name: 📋 Terraform Plan
+      - name: Terraform Plan
         run: |
           echo "Génération du plan d'exécution..."
           terraform plan -out=tfplan
-          echo "✅ Plan généré"
+          echo "Plan généré"
 
-      - name: 🚀 Terraform Apply
+      - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           echo "Application du plan Terraform..."
           terraform apply -auto-approve tfplan
-          echo "✅ Infrastructure déployée"
+          echo "Infrastructure déployée"
 
-      - name: 📤 Output Terraform Results
+      - name: Output Terraform Results
         if: always()
         run: |
           echo "Affichage des outputs..."

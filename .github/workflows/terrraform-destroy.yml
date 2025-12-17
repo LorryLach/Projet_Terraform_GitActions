@@ -1,28 +1,174 @@
-name: Terraform Destroy
+name: Terraform Destroy Infrastructure
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  
+   
+
+env:
+  AWS_REGION: us-east-1
+  BUCKET_NAME: terraform-state-lorrylach-2025
+  TF_VERSION: 1.6.0
 
 jobs:
-  terraform-destroy:
+  # ═══════════════════════════════════════════════════════════
+  # JOB 1 : VALIDATION DE LA CONFIRMATION
+  # ═══════════════════════════════════════════════════════════
+  validate:
+    name: ✋ Validate Destruction Request
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout
+      - name: 🛑 Check Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "destroy" ]; then
+            echo "❌ ERREUR: Vous devez taper 'destroy' pour confirmer"
+            echo "Vous avez tapé: '${{ github.event.inputs.confirm }}'"
+            exit 1
+          fi
+          echo "✅ Confirmation reçue - destruction autorisée"
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 2 : DESTRUCTION DE L'INFRASTRUCTURE
+  # ═══════════════════════════════════════════════════════════
+  destroy:
+    name: 💥 Destroy Infrastructure
+    runs-on: ubuntu-latest
+    needs: validate
+    
+    steps:
+      - name: 📥 Checkout code
         uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
+      - name: 🔧 Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: 🔐 Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+      - name: 🔍 Verify S3 Backend
+        run: |
+          echo "Vérification du backend S3..."
+          if aws s3api head-bucket --bucket "${{ env.BUCKET_NAME }}" 2>/dev/null; then
+            echo "✅ Backend S3 accessible"
+          else
+            echo "⚠️ Le bucket S3 n'existe pas - l'état Terraform est peut-être déjà supprimé"
+            exit 1
+          fi
+
+      - name: 🎯 Terraform Init
+        run: |
+          echo "════════════════════════════════════════════"
+          echo "Initialisation de Terraform"
+          echo "════════════════════════════════════════════"
+          terraform init -input=false
+          echo "✅ Terraform initialisé"
+
+      - name: 📋 List Current Resources
+        run: |
+          echo "════════════════════════════════════════════"
+          echo "Ressources actuellement déployées:"
+          echo "════════════════════════════════════════════"
+          terraform state list || echo "Aucune ressource trouvée"
+
+      - name: 📊 Terraform Plan Destroy
+        env:
+          TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD }}
+        run: |
+          echo "════════════════════════════════════════════"
+          echo "Génération du plan de destruction"
+          echo "════════════════════════════════════════════"
+          terraform plan -destroy -input=false -out=destroy.tfplan
+          echo "✅ Plan de destruction généré"
+
+      - name: 📄 Show Destroy Plan
+        run: |
+          echo "Aperçu des ressources à détruire:"
+          terraform show -no-color destroy.tfplan | head -n 50
+
+      - name: ⏸️ Wait Before Destruction
+        run: |
+          echo "⏳ Attente de 10 secondes avant destruction..."
+          echo "   (Temps de réflexion pour annuler si nécessaire)"
+          sleep 10
+
+      - name: 💥 Terraform Destroy
+        env:
+          TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD }}
+        run: |
+          echo "════════════════════════════════════════════"
+          echo "🔥 DESTRUCTION DE L'INFRASTRUCTURE 🔥"
+          echo "════════════════════════════════════════════"
+          terraform destroy -auto-approve -input=false
+          echo "✅ Infrastructure détruite avec succès"
+
+      - name: 🧹 Verify Destruction
+        run: |
+          echo "Vérification de la destruction..."
+          RESOURCES=$(terraform state list | wc -l)
+          if [ "$RESOURCES" -eq 0 ]; then
+            echo "✅ Toutes les ressources ont été détruites"
+          else
+            echo "⚠️ Attention: $RESOURCES ressource(s) restante(s)"
+            terraform state list
+          fi
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 3 : NETTOYAGE DU BUCKET S3 (Optionnel)
+  # ═══════════════════════════════════════════════════════════
+  cleanup:
+    name: 🧹 Cleanup S3 Backend (Optional)
+    runs-on: ubuntu-latest
+    needs: destroy
+    if: success()
+    
+    steps:
+      - name: 🔐 Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
         with:
-          terraform_version: "1.5.0"
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform Destroy
-        run: terraform destroy -auto-approve
+      - name: 🗑️ Clean S3 State Files
+        run: |
+          echo "════════════════════════════════════════════"
+          echo "Nettoyage des fichiers d'état S3"
+          echo "════════════════════════════════════════════"
+          
+          # Lister les fichiers
+          echo "📋 Fichiers dans le bucket:"
+          aws s3 ls s3://${{ env.BUCKET_NAME }}/project/ --recursive
+          
+          # Demande de confirmation pour supprimer les fichiers d'état
+          echo ""
+          echo "⚠️  ATTENTION: Voulez-vous supprimer les fichiers d'état?"
+          echo "   Les fichiers d'état contiennent l'historique de votre infrastructure"
+          echo ""
+          echo "Pour supprimer automatiquement, décommentez les lignes ci-dessous"
+          
+          # Décommentez ces lignes pour supprimer automatiquement
+          # aws s3 rm s3://${{ env.BUCKET_NAME }}/project/ --recursive
+          # echo "✅ Fichiers d'état supprimés"
+
+      - name: 🪣 Delete S3 Bucket (Optional)
+        run: |
+          echo "════════════════════════════════════════════"
+          echo "Suppression du bucket S3"
+          echo "════════════════════════════════════════════"
+          
+          echo "⚠️  Pour supprimer le bucket, décommentez les lignes ci-dessous"
+          
+          # Décommentez ces lignes pour supprimer le bucket
+          # aws s3 rb s3://${{ env.BUCKET_NAME }} --force
+          # echo "✅ Bucket S3 supprimé"
+          
+          echo "ℹ️  Le bucket S3 est conservé pour référence"
+          echo "   Vous pouvez le supprimer manuellement depuis la console AWS"
