@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 env:
-  BUCKET_NAME: terraform-state-lorrylach-2024  # ⬅️ Même nom qu'avant
+  BUCKET_NAME: terraform-state-lorrylach-2025  # ⬅️ Même nom qu'avant
   AWS_REGION: us-east-1
 
 jobs:
