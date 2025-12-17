@@ -42,18 +42,31 @@ jobs:
         if: steps.check_bucket.outputs.exists == 'false'
         run: |
           echo "Création du bucket ${{ env.BUCKET_NAME }} (us-east-1)..."
-
-          aws s3api create-bucket \
-            --bucket "${{ env.BUCKET_NAME }}"
-
-          echo "Attente de la propagation AWS S3..."
-          sleep 10
-
+      
+          set +e
+          aws s3api create-bucket --bucket "${{ env.BUCKET_NAME }}"
+          CREATE_EXIT_CODE=$?
+          set -e
+      
+          if [ $CREATE_EXIT_CODE -ne 0 ]; then
+            echo "Bucket déjà en cours de création ou existant, attente..."
+          fi
+      
+          echo "Attente de la disponibilité du bucket..."
+          for i in {1..12}; do
+            if aws s3api head-bucket --bucket "${{ env.BUCKET_NAME }}" 2>/dev/null; then
+              echo "Bucket disponible"
+              break
+            fi
+            echo "Bucket non encore prêt, nouvelle tentative..."
+            sleep 10
+          done
+      
           echo "Activation du versioning..."
           aws s3api put-bucket-versioning \
             --bucket "${{ env.BUCKET_NAME }}" \
             --versioning-configuration Status=Enabled
-
+      
           echo "Activation du chiffrement..."
           aws s3api put-bucket-encryption \
             --bucket "${{ env.BUCKET_NAME }}" \
@@ -64,14 +77,16 @@ jobs:
                 }
               }]
             }'
-
+      
           echo "Blocage de l'accès public..."
           aws s3api put-public-access-block \
             --bucket "${{ env.BUCKET_NAME }}" \
             --public-access-block-configuration \
             "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+      
+          echo "Bucket prêt pour Terraform"
 
-          echo "Bucket créé et configuré avec succès"
+
 
   terraform:
     name: Terraform Deployment
